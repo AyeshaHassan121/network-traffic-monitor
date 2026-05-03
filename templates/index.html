@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Network Traffic Monitor</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #f0f2f5; padding: 20px; }
+
+        .header {
+            background-color: #1a3c6e;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .header h1 { font-size: 18px; }
+        .header .status { font-size: 13px; opacity: 0.8; margin-top: 4px; }
+        .header-btns { display: flex; gap: 10px; }
+
+        button {
+            padding: 8px 18px;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #startBtn { background-color: #28a745; color: white; }
+        #stopBtn  { background-color: #dc3545; color: white; }
+        #filterBtn { background-color: #1a3c6e; color: white; }
+        #resetBtn  { background-color: #6c757d; color: white; }
+
+        .filter-bar {
+            background: white;
+            padding: 14px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            border: 1px solid #dde3ed;
+        }
+        .filter-bar label { font-size: 12px; color: #555; display: block; margin-bottom: 4px; }
+        .filter-bar select,
+        .filter-bar input {
+            padding: 7px 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 13px;
+            width: 160px;
+        }
+        .filter-group { display: flex; flex-direction: column; }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 14px 16px;
+            border: 1px solid #dde3ed;
+            text-align: center;
+        }
+        .stat-card .val { font-size: 26px; font-weight: bold; color: #1a3c6e; }
+        .stat-card .lbl { font-size: 12px; color: #777; margin-top: 4px; }
+
+        .table-card {
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #dde3ed;
+            overflow: hidden;
+        }
+        .table-card h3 {
+            font-size: 13px;
+            color: #1a3c6e;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            padding: 12px 16px;
+            border-bottom: 1px solid #eee;
+        }
+        .table-wrapper { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th {
+            background-color: #1a3c6e;
+            color: white;
+            padding: 9px 12px;
+            text-align: left;
+            font-weight: 500;
+        }
+        td { padding: 8px 12px; border-bottom: 1px solid #eee; color: #333; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover td { background-color: #eef3fb; }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .badge-tcp  { background: #cfe2ff; color: #0a3678; }
+        .badge-udp  { background: #d1e7dd; color: #0a4d2e; }
+        .badge-icmp { background: #ffe5d0; color: #7c3100; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div>
+            <h1>Network Traffic Monitor</h1>
+            <div class="status" id="statusText">Status: Stopped</div>
+        </div>
+        <div class="header-btns">
+            <button id="startBtn" onclick="startMonitoring()">Start Monitoring</button>
+            <button id="stopBtn" onclick="stopMonitoring()">Stop Monitoring</button>
+        </div>
+    </div>
+
+    <div class="filter-bar">
+        <div class="filter-group">
+            <label>Protocol</label>
+            <select id="filterProtocol">
+                <option value="">All</option>
+                <option value="TCP">TCP</option>
+                <option value="UDP">UDP</option>
+                <option value="ICMP">ICMP</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Source IP</label>
+            <input type="text" id="filterSrcIp" placeholder="e.g. 192.168.1.1">
+        </div>
+        <div class="filter-group">
+            <label>Destination IP</label>
+            <input type="text" id="filterDstIp" placeholder="e.g. 8.8.8.8">
+        </div>
+        <button id="filterBtn" onclick="applyFilter()">Apply Filter</button>
+        <button id="resetBtn" onclick="resetFilter()">Reset Filter</button>
+    </div>
+
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="val" id="statTotal">0</div>
+            <div class="lbl">Total Packets</div>
+        </div>
+        <div class="stat-card">
+            <div class="val" id="statTcp">0</div>
+            <div class="lbl">TCP Packets</div>
+        </div>
+        <div class="stat-card">
+            <div class="val" id="statUdp">0</div>
+            <div class="lbl">UDP Packets</div>
+        </div>
+        <div class="stat-card">
+            <div class="val" id="statIcmp">0</div>
+            <div class="lbl">ICMP Packets</div>
+        </div>
+        <div class="stat-card">
+            <div class="val" id="statAvg">0</div>
+            <div class="lbl">Avg Size (bytes)</div>
+        </div>
+    </div>
+
+    <div class="table-card">
+        <h3>Captured Packets</h3>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Source IP</th>
+                        <th>Destination IP</th>
+                        <th>Protocol</th>
+                        <th>Src Port</th>
+                        <th>Dst Port</th>
+                        <th>Service</th>
+                        <th>Size (bytes)</th>
+                    </tr>
+                </thead>
+                <tbody id="packetTableBody">
+                    <tr><td colspan="8" style="text-align:center;color:#999;padding:20px;">Click Start Monitoring to load data</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let activeFilters = { protocol: '', src_ip: '', dst_ip: '' };
+
+        function startMonitoring() {
+            fetch('/start', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('statusText').textContent = 'Status: Running...';
+                    document.getElementById('startBtn').disabled = true;
+                    fetchData();
+                });
+        }
+
+        function stopMonitoring() {
+            fetch('/stop', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('statusText').textContent = 'Status: Stopped';
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('packetTableBody').innerHTML =
+                        '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px;">Click Start Monitoring to load data</td></tr>';
+                    document.getElementById('statTotal').textContent = 0;
+                    document.getElementById('statTcp').textContent   = 0;
+                    document.getElementById('statUdp').textContent   = 0;
+                    document.getElementById('statIcmp').textContent  = 0;
+                    document.getElementById('statAvg').textContent   = 0;
+                });
+        }
+
+        function fetchData() {
+            let url = '/packets?';
+            if (activeFilters.protocol) url += 'protocol=' + activeFilters.protocol + '&';
+            if (activeFilters.src_ip)   url += 'src_ip='   + activeFilters.src_ip   + '&';
+            if (activeFilters.dst_ip)   url += 'dst_ip='   + activeFilters.dst_ip   + '&';
+
+            fetch(url)
+                .then(res => res.json())
+                .then(packets => { updateTable(packets); });
+
+            fetch('/stats')
+                .then(res => res.json())
+                .then(stats => {
+                    document.getElementById('statTotal').textContent = stats.total;
+                    document.getElementById('statTcp').textContent   = stats.tcp;
+                    document.getElementById('statUdp').textContent   = stats.udp;
+                    document.getElementById('statIcmp').textContent  = stats.icmp;
+                    document.getElementById('statAvg').textContent   = stats.avg_size;
+                });
+        }
+
+        function updateTable(packets) {
+            const tbody = document.getElementById('packetTableBody');
+            if (packets.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px;">No packets match filter</td></tr>';
+                return;
+            }
+            tbody.innerHTML = '';
+            packets.forEach(p => {
+                const badgeClass = p.protocol === 'TCP' ? 'badge-tcp' : p.protocol === 'UDP' ? 'badge-udp' : 'badge-icmp';
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${p.time}</td>
+                        <td>${p.src_ip}</td>
+                        <td>${p.dst_ip}</td>
+                        <td><span class="badge ${badgeClass}">${p.protocol}</span></td>
+                        <td>${p.src_port}</td>
+                        <td>${p.dst_port}</td>
+                        <td>${p.service}</td>
+                        <td>${p.size}</td>
+                    </tr>`;
+            });
+        }
+
+        function applyFilter() {
+            activeFilters.protocol = document.getElementById('filterProtocol').value;
+            activeFilters.src_ip   = document.getElementById('filterSrcIp').value.trim();
+            activeFilters.dst_ip   = document.getElementById('filterDstIp').value.trim();
+
+            let url = '/packets?';
+            if (activeFilters.protocol) url += 'protocol=' + activeFilters.protocol + '&';
+            if (activeFilters.src_ip)   url += 'src_ip='   + activeFilters.src_ip   + '&';
+            if (activeFilters.dst_ip)   url += 'dst_ip='   + activeFilters.dst_ip   + '&';
+
+            fetch(url)
+                .then(res => res.json())
+                .then(packets => { updateTable(packets); });
+        }
+
+        function resetFilter() {
+            document.getElementById('filterProtocol').value = '';
+            document.getElementById('filterSrcIp').value = '';
+            document.getElementById('filterDstIp').value = '';
+            activeFilters = { protocol: '', src_ip: '', dst_ip: '' };
+
+            fetch('/packets')
+                .then(res => res.json())
+                .then(packets => { updateTable(packets); });
+        }
+    </script>
+</body>
+</html>
